@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HireOS Brain · Evidence workspace</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header><a class="brand" href="/">HireOS <span>Brain</span></a>
+    <span class="tag">Synthetic demo</span><a href="/docs" target="_blank" rel="noreferrer">API reference ↗</a>
+  </header>
+  <main>
+    <section class="intro"><p class="eyebrow">MEMORY · RETRIEVAL · REASONING</p>
+      <h1>A clear answer.<br>Evidence you can inspect.</h1>
+      <p>Compare recruiting conversion, trace the records, and see what changes when a new outcome arrives.</p>
+    </section>
+    <section class="panel connection">
+      <div><h2>Connect your demo identity</h2><p class="muted">Paste a short-lived token generated in your terminal. Tenant and role come from its verified claims.</p></div>
+      <form id="connect-form"><label for="token">Demo access token</label><div class="inline">
+        <input id="token" type="password" autocomplete="off" placeholder="Paste token here" required>
+        <button>Connect</button><button id="disconnect" type="button" class="secondary">Disconnect</button>
+      </div></form><p id="identity" class="muted">Disconnected</p>
+      <details><summary>Generate a token locally</summary>
+        <pre>docker compose exec api python scripts/demo_token.py --tenant a --role admin</pre>
+        <p>Use <code>--tenant b</code> for the second tenant; use <code>--role viewer</code> to test read-only access.</p>
+      </details>
+    </section>
+    <p id="notice" role="status" aria-live="polite"></p>
+    <div class="workspace">
+      <aside>
+        <section class="panel"><p class="step">01 / INGEST</p><h2>Add source evidence</h2>
+          <p class="muted">Upload jobs, submissions, interviews, then starts. Add the policy as UTF-8 text or Markdown.</p>
+          <form id="upload-form">
+            <label for="kind">Source type</label><select id="kind"><option value="jobs">Jobs CSV</option><option value="submissions">Submissions CSV</option><option value="interviews">Interviews CSV</option><option value="starts">Starts CSV</option><option value="policy">Policy document</option></select>
+            <label for="file">File</label><input id="file" type="file" accept=".csv,.md,.txt" required>
+            <label for="source">Source identifier</label><input id="source" placeholder="e.g. submissions_a" required pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,127}">
+            <label for="access">Minimum read role</label><select id="access"><option>viewer</option><option>recruiter</option><option>admin</option></select>
+            <button>Upload evidence</button>
+          </form><details><summary>Authorized sources <span id="source-count">0</span></summary><div id="sources"></div></details>
+        </section>
+        <section class="panel"><p class="step">03 / UPDATE</p><h2>Add an outcome</h2>
+          <p class="muted">For the temporary Tenant A fixture, interview <code>SUB-A-J05</code> to change current conversion from 20% to 25%.</p>
+          <form id="outcome-form">
+            <label for="outcome-sub">Submission record</label><input id="outcome-sub" value="SUB-A-J05" required>
+            <label for="outcome-id">New outcome record</label><input id="outcome-id" value="INT-A-NEW-01" required>
+            <label for="outcome-kind">Outcome</label><select id="outcome-kind"><option value="interview">Interview</option><option value="start">Start</option></select>
+            <label for="outcome-time">Occurred at (UTC)</label><input id="outcome-time" type="datetime-local" value="2026-06-25T10:00" required>
+            <button>Add outcome</button>
+          </form>
+        </section>
+      </aside>
+      <div class="answer-column">
+        <section class="panel"><p class="step">02 / ASK HIREOS</p><h2>What changed in your pipeline?</h2>
+          <form id="ask-form">
+            <label for="question">Question</label><textarea id="question" rows="2" required maxlength="1000">Why did ICU RN submissions increase while interviews decreased?</textarea>
+            <div class="inline"><div class="grow"><label for="job-title">Job title</label><input id="job-title" value="ICU RN" required></div><button id="ask-button">Ask HireOS →</button></div>
+            <details><summary>Comparison dates</summary><p class="muted">Leave empty to compare the latest accessible submission month with the previous month. Dates use UTC.</p>
+              <div class="date-grid"><label>Baseline start<input id="baseline_start" type="date"></label><label>Baseline end<input id="baseline_end" type="date"></label><label>Current start<input id="current_start" type="date"></label><label>Current end<input id="current_end" type="date"></label><label>Outcomes as of<input id="as_of" type="date"></label></div>
+            </details>
+          </form>
+        </section>
+        <section id="results" class="panel empty"><div id="answer-empty"><span class="empty-symbol">↗</span><h2>Your evidence starts here</h2><p class="muted">Upload source files or run the temporary seed script, then ask a conversion question.</p></div>
+          <div id="answer-content" hidden>
+            <div class="section-title"><h2>Computed metrics</h2><span class="tag">Deterministic SQL</span></div>
+            <p id="scope-note" class="muted"></p><div id="metric-cards" class="metric-cards"></div><p id="delta" class="delta"></p>
+            <p class="muted">Conversion = distinct submissions with an interview ÷ submissions × 100. Multiple interview events for one submission count once.</p>
+            <hr><div class="section-title"><h2>Grounded explanation</h2><span class="tag">Deterministic mock</span></div>
+            <div id="claims"></div><details><summary>Limitations and definitions</summary><ul id="limitations"></ul></details>
+            <hr><div class="section-title"><h2>Supporting evidence</h2><span id="evidence-count" class="tag"></span></div>
+            <p class="muted">Select a citation to inspect its source record. Policy passages are retrieved context.</p><div id="evidence"></div>
+          </div>
+        </section>
+        <section class="panel"><div class="section-title"><div><p class="step">04 / VERIFY</p><h2>Access & retrieval history</h2></div><button id="probe" type="button" class="secondary">Test cross-tenant denial</button></div>
+          <p class="muted">This test requests the other temporary tenant. Authorized answers, denied attempts, and empty results are logged.</p><div id="audit"></div>
+        </section>
+      </div>
+    </div>
+    <footer>Temporary fixtures are for development. Final demo data and video will be prepared separately.</footer>
+  </main>
+</body>
+</html>

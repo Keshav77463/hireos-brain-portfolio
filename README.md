@@ -1,54 +1,112 @@
 # HireOS Brain
 
-Python 3.12 / FastAPI / PostgreSQL 16 recruiting analytics API.
+An evidence-backed recruiting analytics application built with Python 3.12,
+FastAPI, PostgreSQL 16, and Docker Compose.
 
-## Run locally
+## Current milestone
 
-Install Docker Desktop and Python 3.12, then:
+The local pipeline supports CSV/policy uploads, tenant and role checks,
+deterministic conversion, policy retrieval, cited mock answers, new outcomes,
+and retrieval history. The browser interface runs from the same FastAPI service.
+Small **temporary** synthetic fixtures cover two comparison months and two tenants.
+The proper final dataset and the recorded demo video remain to be prepared.
+
+See [API reference](docs/API.md), [design and security](docs/DESIGN.md),
+and [demo walkthrough](docs/DEMO.md).
+
+## Start locally
+
+Install Docker Desktop with its Linux engine running and Python 3.12.
+From this repository:
 
 ```powershell
 py -3.12 scripts/create_env.py
 docker compose up --build -d
-docker compose exec api python scripts/seed.py
+```
+
+On Linux/macOS, use `python3 scripts/create_env.py`.
+The first command creates a git-ignored `.env` with random local-only credentials.
+It never overwrites an existing file or prints its contents.
+`.env.example` documents the variables without credentials.
+
+Open http://localhost:8000 for the application, or http://localhost:8000/docs
+for the interactive API reference.
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+docker compose ps -a
+docker compose logs migrate
+```
+
+Compose starts the database, waits for its healthcheck, runs the one-shot
+migrator, and starts the API after migrations succeed.
+The database has no host port; the API binds to `127.0.0.1`.
+
+## Authentication
+
+Generate a short-lived token for a synthetic tenant and user:
+
+```powershell
 docker compose exec api python scripts/demo_token.py --tenant a --role admin
 ```
 
-On Linux/macOS use python3 for the environment generator. The ignored .env contains
-random local-only credentials; .env.example contains no secrets. Never commit .env.
-The seed script uses the upload ingestion service. Fixtures are temporary and synthetic.
-No data is seeded automatically and the separate new outcome is not seeded.
+Paste the token into the application's connection field or Swagger's **Authorize** dialog.
+`GET /api/me` shows the
+verified identity. Roles are `viewer`, `recruiter`, and `admin`.
+The API verifies signature, expiry, issuer, audience, and identity claims.
+Tenant and role come only from the verified token.
+HS256 and local token generation are demo conveniences, not a production
+identity service. Use synthetic data and local credentials only.
 
-Open http://localhost:8000/docs and paste the token into Authorize.
-The browser dashboard and expanded reference documentation will follow.
+## Temporary dataset and first question
 
-## API workflow
+Either upload the files from `fixtures/temporary/tenant_a/` in the browser
+(jobs, submissions, interviews, starts, then policy), or use:
 
-POST /api/ingest/csv accepts multipart kind, source_id, min_role and file.
-Kinds: jobs, submissions, interviews, starts. Upload in that order, then send
-the UTF-8 policy to /api/ingest/policy. Fixture headers show the required columns.
-Rows require tenant/source/record IDs and updated_at. Imports are bounded,
-validated, atomic and idempotent. Verified JWT claims determine tenant and role.
-
-POST /api/ask with:
-
-```json
-{"question":"Why did ICU RN submissions increase while interviews decreased?","job_title":"ICU RN"}
+```powershell
+docker compose exec api python scripts/seed.py
 ```
 
-The default compares the latest submission month against the previous month.
-SQL counts distinct cohort submissions with interviews by as_of and divides by
-submissions. Temporary Tenant A: 6/10 = 60%, then 4/20 = 20%.
-The response separates metrics, mock interpretation and evidence. Policy retrieval
-uses full-text search; citations are checked against authorized evidence.
+The script uses the same ingestion service as HTTP uploads. Repeating it is safe;
+it does not automatically ingest the separate new outcome. No data is seeded at startup.
+All fixtures are clearly synthetic, with candidate aliases rather than real people.
 
-POST fixtures/temporary/new_outcome.json to /api/outcomes, then ask again: 5/20 = 25%.
-GET /api/sources and /api/retrieval-logs inspect provenance and retrieval snapshots.
-Other-tenant target_tenant_id requests return 403. Viewers cannot ingest.
-All six source/evidence/audit tables force RLS; identity settings are transaction-local.
-The app is a non-owner without RLS bypass; migrations use a separate user.
-Audit rows are append-only for the app. Metrics and evidence share a repeatable-read snapshot.
+Connect a Tenant A token and ask:
+**Why did ICU RN submissions increase while interviews decreased?**
+The default comparison selects the latest accessible submission month (June 2026)
+and its preceding month (May 2026).
 
-## Checks and limits
+Expected calculation: baseline 6/10 = 60%; current 4/20 = 20%.
+Add the interview for `SUB-A-J05` using the outcome form (or the JSON example
+in `fixtures/temporary/new_outcome.json`). Ask again: current 5/20 = 25%.
+Repeated ingestion of the same record is idempotent.
+The answer shows SQL metrics, separately labelled deterministic mock interpretation,
+source records, policy chunks, limitations, and a retrieval log ID.
+
+Generate a `--tenant b` token to view its distinct data. The cross-tenant test
+button requests the other tenant and must receive HTTP 403 with no evidence.
+Generate a `--role viewer` token to verify read-only behavior.
+
+## Security foundation
+
+- Bootstrap credentials stay in the database service. The API receives only
+  `hireos_app` credentials: no superuser, ownership, or RLS bypass privileges.
+- `hireos_migrator` owns the application schema and runs migrations separately.
+- All six source, evidence and audit tables have FORCE ROW LEVEL SECURITY.
+- `tenant_session` sets `app.tenant_id`, `app.role` and `app.user_id` with transaction-local
+  `set_config(..., true)` values that expire on commit or rollback.
+- Sources have minimum-role visibility. Viewers cannot write sources, and
+  administrators remain restricted to their own tenant.
+- Evidence visibility follows its source and parent job/submission visibility.
+  App-level tenant filters are applied alongside database row policies.
+- Citation validation rejects references outside the evidence retrieved for the request.
+- Audit entries are append-only to the app user. Viewers cannot read past admin answers.
+- Uploads are bounded and validated atomically; the UI renders untrusted text as text.
+- The pgvector extension is enabled; vector search is optional and not implemented.
+
+## Tests and lint
+
+Run tests against the real Compose PostgreSQL as the application database user:
 
 ```powershell
 docker compose --profile test run --rm tests
@@ -56,12 +114,55 @@ docker compose run --rm api ruff check .
 docker compose run --rm api ruff format --check .
 ```
 
-Tests exercise real PostgreSQL as the app user. The API binds to localhost only;
-the database has no host port. Stop with docker compose down to retain data.
-Bootstrap runs only on the first initialization of the database volume.
+Tests cover readiness, JWT failures, application-user privileges, tenant/role
+isolation, denied writes, pooled-connection context reset, conversion, citations,
+freshness, duplicate outcomes, atomic uploads, timestamp cutoffs and policy injection.
+Test rows have random synthetic tenant IDs in the local database.
 
-The mock describes predefined evidence factors; it cannot establish causation or
-answer arbitrary business questions. Recent cohorts have less follow-up time.
-Vector search, real LLM integration and PDF/Word parsing are not implemented.
-Final synthetic data, browser UI, expanded documentation and a 5–10 minute recorded
-demo remain for the following milestones.
+For local Python work:
+
+```powershell
+uv sync --locked
+uv run ruff check .
+```
+
+Dependency versions are recorded in `uv.lock`.
+
+## Database changes and lifecycle
+
+Migrations are in `migrations/versions/`. Run them as the migrator:
+
+```powershell
+docker compose run --rm migrate
+```
+
+Stop services while retaining the database:
+
+```powershell
+docker compose down
+```
+
+The named PostgreSQL volume persists. `docker compose down -v` deletes its data;
+use it only when deliberately resetting this synthetic local demo.
+Bootstrap scripts run only when the volume is first initialized.
+Changing `.env` does not rotate existing database passwords.
+
+## Remaining assignment work
+
+- Replace temporary development fixtures with the agreed final synthetic dataset.
+- Record the 5–10 minute acceptance walkthrough in `docs/DEMO.md`.
+- Review the implementation and explain the design choices and known limits.
+- Commit the reviewed work to the company repository as instructed.
+
+The demo deliberately uses a deterministic mock; no external LLM key is needed.
+Vector search and a BYO LLM adapter are optional and currently not implemented.
+Policy uploads support UTF-8 text/Markdown; binary PDF/Word parsing is not included.
+
+Keep the company repository private. Daily commits are required by the brief;
+commit and push only when explicitly authorized.
+
+## References
+
+- [Docker Compose startup order](https://docs.docker.com/compose/how-tos/startup-order/)
+- [PostgreSQL 16 row security](https://www.postgresql.org/docs/16/ddl-rowsecurity.html)
+- [pgvector](https://github.com/pgvector/pgvector)

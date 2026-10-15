@@ -1,5 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.api.health import router as health_router
@@ -16,11 +20,13 @@ app = FastAPI(
 app.include_router(health_router)
 app.include_router(pipeline_router)
 app.add_middleware(RequestLimitMiddleware)
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
-@app.get("/", tags=["status"])
-def index() -> dict[str, str]:
-    return {"application": "HireOS Brain", "milestone": "pipeline", "api_reference": "/docs"}
+@app.get("/", include_in_schema=False)
+def index(request: Request):
+    return templates.TemplateResponse(request=request, name="index.html")
 
 
 @app.exception_handler(IntegrityError)
