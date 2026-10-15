@@ -30,7 +30,7 @@ def readiness() -> dict[str, str]:
                     "FROM pg_class WHERE oid = 'hireos.sources'::regclass"
                 )
             ).one()
-        if revision != "0001" or not vector_version or any(app_role) or not all(row_security):
+        if revision != "0002" or not vector_version or any(app_role) or not all(row_security):
             raise HTTPException(status_code=503, detail="Database foundation is not ready.")
         return {"status": "ok", "database": "connected", "migration": revision}
     except SQLAlchemyError as exc:

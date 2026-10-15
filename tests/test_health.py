@@ -4,7 +4,7 @@ from sqlalchemy import text
 def test_health_confirms_database_and_migration(client):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "database": "connected", "migration": "0001"}
+    assert response.json() == {"status": "ok", "database": "connected", "migration": "0002"}
 
 
 def test_application_user_cannot_bypass_rls(single_connection_pool):

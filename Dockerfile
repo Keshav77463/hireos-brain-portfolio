@@ -13,6 +13,7 @@ COPY app ./app
 COPY migrations ./migrations
 COPY scripts ./scripts
 COPY tests ./tests
+COPY fixtures ./fixtures
 COPY alembic.ini ./
 RUN groupadd --gid 10001 hireos && useradd --uid 10001 --gid hireos --no-create-home hireos
 USER hireos
