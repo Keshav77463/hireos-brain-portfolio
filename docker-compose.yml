@@ -1,0 +1,76 @@
+name: hireos-brain
+
+x-app-environment: &app-environment
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_NAME: ${POSTGRES_DB:-hireos}
+  DB_USER: hireos_app
+  DB_PASSWORD: ${APP_DB_PASSWORD:?Run python scripts/create_env.py first}
+  JWT_SECRET: ${JWT_SECRET:?Run python scripts/create_env.py first}
+  JWT_ISSUER: ${JWT_ISSUER:-hireos-demo}
+  JWT_AUDIENCE: ${JWT_AUDIENCE:-hireos-api}
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg16-trixie
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hireos}
+      POSTGRES_USER: ${POSTGRES_USER:-hireos_bootstrap}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run python scripts/create_env.py first}
+      MIGRATOR_DB_PASSWORD: ${MIGRATOR_DB_PASSWORD:?Run python scripts/create_env.py first}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Run python scripts/create_env.py first}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  migrate:
+    image: hireos-brain:local
+    build: .
+    environment:
+      <<: *app-environment
+      DB_USER: hireos_migrator
+      DB_PASSWORD: ${MIGRATOR_DB_PASSWORD:?Run python scripts/create_env.py first}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    image: hireos-brain:local
+    build: .
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  tests:
+    image: hireos-brain:local
+    build: .
+    profiles: ["test"]
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+
+volumes:
+  postgres_data:
