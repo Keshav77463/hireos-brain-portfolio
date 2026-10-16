@@ -1,0 +1,6 @@
+submission_id,job_id,client_name,specialty,candidate_ref,submitted_at,status,rejection_reason,interview_id,interviewed_at,start_id,started_at,updated_at
+SUB-B-M01,JOB-B-ICU,Synthetic facility B,ICU RN,Synthetic-B-M01,2026-05-10T09:00:00Z,started,,INT-B-M01,2026-05-15T10:00:00Z,START-B-M01,2026-05-20T10:00:00Z,2026-07-01T00:00:00Z
+SUB-B-M02,JOB-B-ICU,Synthetic facility B,ICU RN,Synthetic-B-M02,2026-05-10T09:00:00Z,awaiting_client_review,,,,,,2026-07-01T00:00:00Z
+SUB-B-J01,JOB-B-ICU,Synthetic facility B,ICU RN,Synthetic-B-J01,2026-06-10T09:00:00Z,interviewed,,INT-B-J01,2026-06-15T10:00:00Z,,,2026-07-01T00:00:00Z
+SUB-B-J02,JOB-B-ICU,Synthetic facility B,ICU RN,Synthetic-B-J02,2026-06-10T09:00:00Z,awaiting_client_review,,,,,,2026-07-01T00:00:00Z
+SUB-B-J03,JOB-B-ICU,Synthetic facility B,ICU RN,Synthetic-B-J03,2026-06-10T09:00:00Z,awaiting_documents,,,,,,2026-07-01T00:00:00Z

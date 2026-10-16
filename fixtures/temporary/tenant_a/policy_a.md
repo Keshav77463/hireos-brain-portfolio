@@ -9,3 +9,7 @@ Before an ICU RN interview is scheduled, the demo recruiter checks the submitted
 ## Client review
 
 After submission, a synthetic client reviewer approves interview scheduling. Records awaiting client review remain queued. A recorded queue is not proof of why an individual interview did not occur.
+
+## Recorded reasons
+
+The status and rejection_reason fields contain recorded workflow facts and explanations. A queue status alone does not establish the cause of a delay or rejection.
