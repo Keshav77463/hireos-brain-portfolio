@@ -31,14 +31,14 @@
     <div class="workspace">
       <aside>
         <section class="panel"><p class="step">01 / INGEST</p><h2>Add source evidence</h2>
-          <p class="muted">Upload jobs, submissions, interviews, then starts. Add the policy as UTF-8 text or Markdown.</p>
+          <p class="muted">Upload one 13-column CSV with one row per submission, including its job, interview and start details. Add your policy separately as text or Markdown.</p>
           <form id="upload-form">
-            <label for="kind">Source type</label><select id="kind"><option value="jobs">Jobs CSV</option><option value="submissions">Submissions CSV</option><option value="interviews">Interviews CSV</option><option value="starts">Starts CSV</option><option value="policy">Policy document</option></select>
+            <label for="kind">Upload type</label><select id="kind"><option value="operational">Operational CSV</option><option value="policy">Policy document</option></select>
             <label for="file">File</label><input id="file" type="file" accept=".csv,.md,.txt" required>
-            <label for="source">Source identifier</label><input id="source" placeholder="e.g. submissions_a" required pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,127}">
+            <div id="policy-source" hidden><label for="source">Policy source identifier</label><input id="source" placeholder="e.g. policy_a" disabled pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"></div>
             <label for="access">Minimum read role</label><select id="access"><option>viewer</option><option>recruiter</option><option>admin</option></select>
             <button>Upload evidence</button>
-          </form><details><summary>Authorized sources <span id="source-count">0</span></summary><div id="sources"></div></details>
+          </form><details><summary>Uploaded evidence <span id="source-count">0</span></summary><div id="sources"></div></details>
         </section>
         <section class="panel"><p class="step">03 / UPDATE</p><h2>Add an outcome</h2>
           <p class="muted">For the temporary Tenant A fixture, interview <code>SUB-A-J05</code> to change current conversion from 20% to 25%.</p>

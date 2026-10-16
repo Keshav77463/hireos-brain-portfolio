@@ -40,12 +40,20 @@ function disconnect() {
 }
 async function refresh() {
   const [sources, logs] = await Promise.all([api("/api/sources"), api("/api/retrieval-logs")]);
-  $("sources").replaceChildren(...sources.map(s => {
+  const groups = new Map();
+  sources.forEach(source => {
+    const key = source.type + ":" + source.filename;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(source);
+  });
+  $("sources").replaceChildren(...Array.from(groups.values()).map(entries => {
     const row = node("div", undefined, "source-row");
-    row.append(node("strong", s.source_id), node("div", s.filename + " · " + s.min_role));
+    row.append(node("strong", entries[0].filename),
+      node("div", entries.map(source => source.source_id).join(" · ")),
+      node("div", "Access: " + Array.from(new Set(entries.map(source => source.min_role))).join(", ")));
     return row;
   }));
-  $("source-count").textContent = sources.length;
+  $("source-count").textContent = groups.size;
   $("audit").replaceChildren(...logs.map(log => {
     const row = node("div", undefined, "audit-row");
     row.append(node("span", log.status, "tag"), node("span", log.question),
@@ -72,6 +80,16 @@ $("disconnect").addEventListener("click", () => { disconnect(); notice("Disconne
 $("file").addEventListener("change", () => {
   if ($("file").files[0]) $("source").value = $("file").files[0].name.replace(/\.[^.]+$/, "");
 });
+function updateUploadKind() {
+  const policy = $("kind").value === "policy";
+  $("policy-source").hidden = !policy;
+  $("source").disabled = !policy;
+  $("source").required = policy;
+  $("file").accept = policy ? ".md,.txt" : ".csv";
+  $("file").value = "";
+}
+$("kind").addEventListener("change", updateUploadKind);
+updateUploadKind();
 async function runForm(form, action) {
   const button = form.querySelector("button");
   button.disabled = true;
@@ -83,12 +101,16 @@ $("upload-form").addEventListener("submit", event => {
   runForm(event.target, async () => {
     const kind = $("kind").value;
     const body = new FormData();
-    body.append("source_id", $("source").value);
+    if (kind === "policy") body.append("source_id", $("source").value);
     body.append("min_role", $("access").value);
     body.append("file", $("file").files[0]);
     if (kind !== "policy") body.append("kind", kind);
     const result = await api("/api/ingest/" + (kind === "policy" ? "policy" : "csv"), {method: "POST", body});
-    notice("Upload complete · " + JSON.stringify(result));
+    if (result.record_types) {
+      const counts = Object.entries(result.record_types).map(([name, count]) => count + " " + name + " records");
+      notice("CSV uploaded · " + result.rows + " submission rows; " + counts.join(", ") + ". Inserted: " + result.inserted +
+        "; updated: " + result.updated + "; unchanged: " + result.unchanged + "; stale: " + result.stale + ".");
+    } else notice("Policy upload complete · " + JSON.stringify(result));
     await refresh();
   });
 });
