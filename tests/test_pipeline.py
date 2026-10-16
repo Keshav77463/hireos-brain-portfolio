@@ -47,18 +47,63 @@ def csv_bytes(rows):
 
 
 def file_rows(identity, kind):
-    rows = list(csv.DictReader(io.StringIO((FIXTURES / f"{kind}_a.csv").read_text())))
-    for row in rows:
-        row["tenant_id"] = str(identity.tenant_id)
+    flat = list(csv.DictReader(io.StringIO((FIXTURES / "operations_a.csv").read_text())))
+    rows, seen_jobs = [], set()
+    for raw in flat:
+        common = {
+            "tenant_id": str(identity.tenant_id),
+            "source_id": "operations",
+            "updated_at": raw["updated_at"],
+        }
+        if kind == "jobs":
+            if raw["job_id"] in seen_jobs:
+                continue
+            seen_jobs.add(raw["job_id"])
+            rows.append(
+                {
+                    **common,
+                    "record_id": raw["job_id"],
+                    "title": raw["specialty"],
+                    "location": raw["client_name"],
+                }
+            )
+        elif kind == "submissions":
+            rows.append(
+                {
+                    **common,
+                    "record_id": raw["submission_id"],
+                    "job_id": raw["job_id"],
+                    "candidate_alias": raw["candidate_ref"],
+                    "submitted_at": raw["submitted_at"],
+                    "reason": raw["status"],
+                }
+            )
+        else:
+            event_id = raw["interview_id"] if kind == "interviews" else raw["start_id"]
+            if event_id:
+                rows.append(
+                    {
+                        **common,
+                        "record_id": event_id,
+                        "submission_id": raw["submission_id"],
+                        "occurred_at": raw["interviewed_at"]
+                        if kind == "interviews"
+                        else raw["started_at"],
+                    }
+                )
     return rows
 
 
 def upload(client, identity, kind, rows=None, source_id=None, min_role="viewer"):
+    actual_rows = rows or file_rows(identity, kind)
+    if rows is None and source_id:
+        for row in actual_rows:
+            row["source_id"] = source_id
     return client.post(
         "/api/ingest/csv",
         headers=headers(identity),
-        data={"kind": kind, "source_id": source_id or f"{kind}_a", "min_role": min_role},
-        files={"file": (f"{kind}.csv", csv_bytes(rows or file_rows(identity, kind)), "text/csv")},
+        data={"kind": kind, "source_id": source_id or "operations", "min_role": min_role},
+        files={"file": (f"{kind}.csv", csv_bytes(actual_rows), "text/csv")},
     )
 
 
@@ -83,9 +128,14 @@ def new_outcome(identity, **kwargs):
 @pytest.fixture
 def seeded(client):
     identity = Principal(tenant_id=uuid4(), user_id=uuid4(), role="admin")
-    for kind in ("jobs", "submissions", "interviews", "starts"):
-        response = upload(client, identity, kind)
-        assert response.status_code == 200, response.text
+    rows = list(csv.DictReader(io.StringIO((FIXTURES / "operations_a.csv").read_text())))
+    response = client.post(
+        "/api/ingest/csv",
+        headers=headers(identity),
+        data={"min_role": "viewer"},
+        files={"file": ("operations_a.csv", csv_bytes(rows), "text/csv")},
+    )
+    assert response.status_code == 200, response.text
     response = client.post(
         "/api/ingest/policy",
         headers=headers(identity),
@@ -129,8 +179,8 @@ def test_calculation_citations_freshness_and_idempotency(client, seeded):
     )
     assert duplicate_event.status_code == 200
     assert ask(client, seeded).json()["metrics"]["current"]["interviews"] == 5
-    repeated_csv = upload(client, seeded, "submissions")
-    assert repeated_csv.json()["unchanged"] == 30
+    repeated_csv = upload_operational(client, seeded, operational_rows())
+    assert repeated_csv.json()["unchanged"] == 43
     logs = client.get("/api/retrieval-logs", headers=headers(seeded)).json()
     assert len(logs) == 3
     assert logs[0]["metrics"]["current"]["interviews"] == 5
@@ -213,7 +263,7 @@ def test_atomic_import_conflicts_stale_and_invalid_links(client, seeded):
     rows = file_rows(seeded, "submissions")[:1]
     rows[0]["candidate_alias"] = "Changed at same timestamp"
     assert upload(client, seeded, "submissions", rows).status_code == 409
-    rows[0]["updated_at"] = "2026-05-11T00:00:00Z"
+    rows[0]["updated_at"] = "2026-07-02T00:00:00Z"
     assert upload(client, seeded, "submissions", rows).json()["updated"] == 1
     assert (
         upload(client, seeded, "submissions", file_rows(seeded, "submissions")[:1]).json()["stale"]
@@ -323,3 +373,247 @@ def test_every_evidence_table_forces_rls(single_connection_pool):
         ).all()
     assert len(rows) == 6
     assert all(secure and forced for _, secure, forced in rows)
+
+
+def operational_rows():
+    return list(csv.DictReader(io.StringIO((FIXTURES / "operations_a.csv").read_text())))
+
+
+def upload_operational(client, identity, rows, **data):
+    return client.post(
+        "/api/ingest/csv",
+        headers=headers(identity),
+        data=data,
+        files={"file": ("operations_a.csv", csv_bytes(rows), "text/csv")},
+    )
+
+
+def test_operational_metadata_idempotency_and_new_outcome(client):
+    identity = Principal(tenant_id=uuid4(), user_id=uuid4(), role="admin")
+    rows = list(reversed(operational_rows()))
+    response = upload_operational(client, identity, rows)
+    assert response.status_code == 200, response.text
+    assert response.json()["rows"] == 30
+    assert response.json()["inserted"] == 43
+    assert response.json()["record_types"] == {
+        "job": 1,
+        "submission": 30,
+        "interview": 10,
+        "start": 2,
+    }
+    result = ask(client, identity).json()
+    assert result["metrics"]["baseline"]["conversion_percent"] == 60
+    assert result["metrics"]["current"]["conversion_percent"] == 20
+    assert all(
+        e["filename"] == "operations_a.csv"
+        for e in result["evidence"]
+        if e["kind"] != "computed_metric"
+    )
+    with tenant_session(identity) as session:
+        submission = session.get(Submission, (identity.tenant_id, "SUB-A-M01"))
+        assert submission.payload["candidate_ref"] == "Synthetic-A-M01"
+        assert len(submission.payload["csv_row"]) == 13
+        job = session.get(Job, (identity.tenant_id, "JOB-A-ICU"))
+        assert job.title == "ICU RN" and job.payload["client_name"] == "Synthetic facility A"
+        interview = session.get(Outcome, (identity.tenant_id, "INT-A-M01"))
+        assert interview.kind == "interview"
+        assert interview.submission_id == "SUB-A-M01"
+    assert upload_operational(client, identity, rows).json()["unchanged"] == 43
+    assert (
+        client.post(
+            "/api/outcomes", headers=headers(identity), json=new_outcome(identity)
+        ).status_code
+        == 200
+    )
+    assert upload_operational(client, identity, rows).json()["unchanged"] == 43
+    assert ask(client, identity).json()["metrics"]["current"]["conversion_percent"] == 25
+
+
+def test_operational_enriches_old_records_preserving_source_ids(client):
+    identity = Principal(tenant_id=uuid4(), user_id=uuid4(), role="admin")
+    for kind in ("jobs", "submissions", "interviews", "starts"):
+        assert upload(client, identity, kind, source_id=f"{kind}_a").status_code == 200
+    rows = operational_rows()
+    for row in rows:
+        row["updated_at"] = "2026-07-02T00:00:00Z"
+    response = upload_operational(client, identity, rows)
+    assert response.status_code == 200, response.text
+    assert response.json()["updated"] == 43
+    assert response.json()["source_ids"] == ["interviews_a", "jobs_a", "starts_a", "submissions_a"]
+    sources = client.get("/api/sources", headers=headers(identity)).json()
+    assert len(sources) == 4
+    assert {s["filename"] for s in sources} == {"operations_a.csv"}
+    assert ask(client, identity).json()["metrics"]["current"]["submissions"] == 20
+
+
+def test_operational_can_use_explicit_source_namespace(client):
+    identity = Principal(tenant_id=uuid4(), user_id=uuid4(), role="recruiter")
+    response = upload_operational(client, identity, operational_rows(), source_id="company-export")
+    assert response.status_code == 200, response.text
+    assert response.json()["source_ids"] == ["company-export"]
+    assert len(client.get("/api/sources", headers=headers(identity)).json()) == 1
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "unknown_status",
+        "duplicate_submission",
+        "outcome_collision",
+        "bad_date",
+        "early_interview",
+        "early_start",
+        "old_updated",
+        "partial_interview",
+        "partial_start",
+        "missing_rejection_reason",
+        "inconsistent_job",
+        "interview_status_without_event",
+    ],
+)
+def test_invalid_operational_rows_leave_no_partial_data(client, problem):
+    identity = Principal(tenant_id=uuid4(), user_id=uuid4(), role="admin")
+    rows = operational_rows()
+    if problem == "unknown_status":
+        rows[-1]["status"] = "unknown"
+    elif problem == "duplicate_submission":
+        rows.append(dict(rows[0]))
+    elif problem == "outcome_collision":
+        rows[0]["start_id"] = rows[0]["interview_id"]
+    elif problem == "bad_date":
+        rows[-1]["submitted_at"] = "not-a-date"
+    elif problem == "early_interview":
+        rows[0]["interviewed_at"] = "2026-05-01T00:00:00Z"
+    elif problem == "early_start":
+        rows[0]["started_at"] = "2026-05-14T00:00:00Z"
+    elif problem == "old_updated":
+        rows[0]["updated_at"] = "2026-05-01T00:00:00Z"
+    elif problem == "partial_interview":
+        rows[-1]["interview_id"] = "INCOMPLETE"
+    elif problem == "partial_start":
+        rows[-1]["start_id"] = "INCOMPLETE"
+    elif problem == "missing_rejection_reason":
+        rows[-1]["status"] = "rejected"
+    elif problem == "inconsistent_job":
+        rows[-1]["client_name"] = "Another facility"
+    elif problem == "interview_status_without_event":
+        rows[-1]["status"] = "interviewed"
+    response = upload_operational(client, identity, rows)
+    assert response.status_code == 422, response.text
+    with tenant_session(identity) as session:
+        for model in (Source, Job, Submission, Outcome):
+            assert session.scalars(select(model)).all() == []
+
+
+def test_operational_identity_is_attached_from_token(client, seeded):
+    viewer = seeded.model_copy(update={"role": "viewer"})
+    assert upload_operational(client, viewer, operational_rows()).status_code == 403
+    outsider = Principal(tenant_id=uuid4(), user_id=uuid4(), role="admin")
+    assert ask(client, outsider).json()["status"] == "no_data"
+    rows = operational_rows()[:1]
+    rows[0]["client_name"] = "Different tenant facility"
+    assert upload_operational(client, outsider, rows).status_code == 200
+    with tenant_session(outsider) as session:
+        own = session.get(Job, (outsider.tenant_id, "JOB-A-ICU"))
+        assert own.payload["client_name"] == "Different tenant facility"
+        assert session.get(Job, (seeded.tenant_id, "JOB-A-ICU")) is None
+    assert ask(client, seeded).json()["metrics"]["current"]["submissions"] == 20
+    assert ask(client, outsider, target_tenant_id=str(seeded.tenant_id)).status_code == 403
+
+
+def test_operational_cannot_downgrade_source_visibility(client):
+    admin = Principal(tenant_id=uuid4(), user_id=uuid4(), role="admin")
+    rows = operational_rows()
+    assert upload_operational(client, admin, rows, min_role="admin").status_code == 200
+    assert upload_operational(client, admin, rows, min_role="viewer").status_code == 409
+    viewer = admin.model_copy(update={"role": "viewer"})
+    assert ask(client, viewer).json()["status"] == "no_data"
+    recruiter = admin.model_copy(update={"role": "recruiter"})
+    assert upload_operational(client, recruiter, rows).status_code == 409
+    assert ask(client, admin).json()["metrics"]["current"]["interviews"] == 4
+
+
+@pytest.mark.parametrize(
+    "problem", ["missing_column", "duplicate_header", "extra_cell", "tenant_column"]
+)
+def test_operational_rejects_malformed_columns(client, problem):
+    identity = Principal(tenant_id=uuid4(), user_id=uuid4(), role="admin")
+    rows = operational_rows()
+    if problem == "missing_column":
+        for row in rows:
+            row.pop("specialty")
+    elif problem == "tenant_column":
+        for row in rows:
+            row["tenant_id"] = str(uuid4())
+    content = csv_bytes(rows)
+    if problem == "duplicate_header":
+        header, remainder = content.split(b"\r\n", 1)
+        content = header + b",status\r\n" + remainder
+    elif problem == "extra_cell":
+        lines = content.split(b"\r\n")
+        lines[-2] += b",unexpected"
+        content = b"\r\n".join(lines)
+    response = client.post(
+        "/api/ingest/csv",
+        headers=headers(identity),
+        files={"file": ("operations.csv", content, "text/csv")},
+    )
+    assert response.status_code == 422
+    assert client.get("/api/sources", headers=headers(identity)).json() == []
+
+
+def test_operational_row_update_and_stale_replay(client, seeded):
+    original = operational_rows()
+    changed = [dict(row) for row in original]
+    row = next(row for row in changed if row["submission_id"] == "SUB-A-J05")
+    row.update(
+        status="interviewed",
+        interview_id="INT-CSV-NEW",
+        interviewed_at="2026-06-25T10:00:00Z",
+        updated_at="2026-07-02T00:00:00Z",
+    )
+    response = upload_operational(client, seeded, changed)
+    assert response.status_code == 200, response.text
+    assert ask(client, seeded).json()["metrics"]["current"]["conversion_percent"] == 25
+    assert upload_operational(client, seeded, original).json()["stale"] >= 1
+    assert ask(client, seeded).json()["metrics"]["current"]["conversion_percent"] == 25
+    assert upload_operational(client, seeded, changed).json()["inserted"] == 0
+
+
+def test_operational_db_conflict_rolls_back_whole_file(client, seeded):
+    rows = operational_rows()
+    for row in rows:
+        row["updated_at"] = "2026-07-02T00:00:00Z"
+    rows[0]["candidate_ref"] = "UPDATED-CANDIDATE"
+    rows[-1]["interview_id"] = "INT-A-M02"
+    rows[-1]["interviewed_at"] = "2026-06-25T00:00:00Z"
+    rows[-1]["status"] = "interviewed"
+    # Remove the same event from its earlier CSV row; the conflicting DB link remains.
+    rows[1].update(interview_id="", interviewed_at="", status="submitted")
+    response = upload_operational(client, seeded, rows)
+    assert response.status_code == 409, response.text
+    with tenant_session(seeded) as session:
+        first = session.get(Submission, (seeded.tenant_id, rows[0]["submission_id"]))
+        assert first.payload["candidate_ref"] == "Synthetic-A-M01"
+
+
+def test_recorded_rejections_are_used_as_evidence(client, seeded):
+    rows = operational_rows()
+    row = next(row for row in rows if row["submission_id"] == "SUB-A-J05")
+    row.update(
+        status="rejected",
+        rejection_reason="Client recorded an experience mismatch",
+        updated_at="2026-07-02T00:00:00Z",
+    )
+    assert upload_operational(client, seeded, rows).status_code == 200
+    result = ask(client, seeded).json()
+    current = result["metrics"]["current"]
+    assert current["interviews"] == 4 and current["conversion_percent"] == 20
+    assert current["rejected_without_interview"] == 1
+    assert current["rejection_reasons"] == [
+        {"reason": "Client recorded an experience mismatch", "count": 1}
+    ]
+    text = " ".join(claim["text"] for claim in result["interpretation"])
+    assert "experience mismatch" in text
+    assert "ACLS" not in text
+    validate_citations(result["interpretation"], result["evidence"])

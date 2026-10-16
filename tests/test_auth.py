@@ -6,6 +6,8 @@ import pytest
 
 from app.config import get_settings
 
+pytestmark = pytest.mark.unit
+
 
 def claims():
     settings = get_settings()
