@@ -7,7 +7,8 @@ from uuid import UUID
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.auth.principal import Principal  # noqa: E402
-from app.ingest.service import ingest_csv, ingest_policy  # noqa: E402
+from app.ingest.operational import ingest_operational  # noqa: E402
+from app.ingest.service import ingest_policy  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1] / "fixtures" / "temporary"
 
@@ -19,10 +20,9 @@ def main():
     ):
         identity = Principal(tenant_id=UUID(tenant), user_id=UUID(tenant), role="admin")
         folder = ROOT / f"tenant_{alias}"
-        for kind in ("jobs", "submissions", "interviews", "starts"):
-            file = folder / f"{kind}_{alias}.csv"
-            result = ingest_csv(identity, kind, file.stem, "viewer", file.name, file.read_bytes())
-            print(alias, kind, result)
+        file = folder / f"operations_{alias}.csv"
+        result = ingest_operational(identity, "viewer", file.name, file.read_bytes())
+        print(alias, "operations", result)
         file = folder / f"policy_{alias}.md"
         print(
             alias,
