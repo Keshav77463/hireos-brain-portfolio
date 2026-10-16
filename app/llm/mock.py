@@ -53,6 +53,28 @@ class MockProvider:
                     "citations": ["metric:current", *ids],
                 }
             )
+        if b["rejected_without_interview"]:
+            reasons = "; ".join(
+                f"{entry['reason']} ({entry['count']})" for entry in b["rejection_reasons"][:3]
+            )
+            rejected_ids = [
+                e["id"]
+                for e in evidence
+                if e["kind"] == "submission"
+                and e.get("period") == "current"
+                and e["record_id"] not in interviewed
+                and e["data"].get("status") == "rejected"
+            ][:3]
+            claims.append(
+                {
+                    "text": (
+                        f"{b['rejected_without_interview']} current submissions without interviews "
+                        f"are recorded as rejected. Reported reasons: {reasons}. "
+                        "These are source-reported explanations, not independently verified causes."
+                    ),
+                    "citations": ["metric:current", *rejected_ids],
+                }
+            )
         policy = [e["id"] for e in evidence if e["kind"] == "policy"]
         if policy:
             claims.append(

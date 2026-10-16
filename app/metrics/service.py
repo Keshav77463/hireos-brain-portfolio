@@ -104,7 +104,10 @@ def calculate(session, principal, request):
                    ) AS awaiting_documents,
                    count(*) FILTER (
                      WHERE NOT interviewed AND payload->>'reason' = 'awaiting_client_review'
-                   ) AS awaiting_client_review
+                   ) AS awaiting_client_review,
+                   count(*) FILTER (
+                     WHERE NOT interviewed AND payload->>'status' = 'rejected'
+                   ) AS rejected_without_interview
             FROM cohort GROUP BY period"""
             ),
             params,
@@ -134,12 +137,27 @@ def calculate(session, principal, request):
                     "starts",
                     "awaiting_documents",
                     "awaiting_client_review",
+                    "rejected_without_interview",
                 )
             },
         }
         count = metrics[key]["submissions"]
         metrics[key]["conversion_percent"] = (
             round(metrics[key]["interviews"] / count * 100, 2) if count else None
+        )
+        metrics[key]["rejection_reasons"] = []
+    reasons = session.execute(
+        text(f"""WITH cohort AS ({COHORT})
+        SELECT period, payload->>'rejection_reason' AS reason, count(*) AS count
+        FROM cohort WHERE NOT interviewed AND payload->>'status' = 'rejected'
+          AND coalesce(payload->>'rejection_reason', '') <> ''
+        GROUP BY period, payload->>'rejection_reason'
+        ORDER BY period, count(*) DESC, payload->>'rejection_reason'"""),
+        params,
+    ).mappings()
+    for row in reasons:
+        metrics[row["period"]]["rejection_reasons"].append(
+            {"reason": row["reason"], "count": row["count"]}
         )
     a, b = metrics["baseline"], metrics["current"]
     metrics["conversion_change_pp"] = (
