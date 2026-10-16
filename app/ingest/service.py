@@ -44,7 +44,13 @@ def parse_csv(data: bytes, kind: str, principal: Principal, source_id: str):
         raise HTTPException(422, "CSV type must be jobs, submissions, interviews or starts.")
     reader = csv.DictReader(io.StringIO(decode(data)), strict=True)
     fields = reader.fieldnames or []
-    if len(set(fields)) != len(fields) or set(fields) != set(ROW_TYPES[kind].model_fields):
+    schema_fields = ROW_TYPES[kind].model_fields
+    required = {name for name, field in schema_fields.items() if field.is_required()}
+    if (
+        len(set(fields)) != len(fields)
+        or not required.issubset(fields)
+        or not set(fields).issubset(schema_fields)
+    ):
         raise HTTPException(422, f"Required CSV columns: {', '.join(ROW_TYPES[kind].model_fields)}")
     rows, identifiers = [], set()
     try:
@@ -94,12 +100,16 @@ def ensure_source(session, principal, source_id, filename, source_type, min_role
     return source
 
 
-def write_row(session, principal, kind, row):
+def write_row(session, principal, kind, row, *, extra_payload=None, preserve_payload=False):
     model = MODELS[kind]
-    payload = row.model_dump(mode="json")
+    payload = row.model_dump(mode="json", exclude_none=True)
     if kind in ("interviews", "starts"):
         payload["kind"] = "interview" if kind == "interviews" else "start"
     existing = session.get(model, (principal.tenant_id, row.record_id))
+    if existing and preserve_payload:
+        payload = {**existing.payload, **payload}
+    if extra_payload:
+        payload.update(extra_payload)
     if existing:
         if existing.source_id != row.source_id:
             raise HTTPException(409, "Record ID already belongs to another source.")

@@ -1,12 +1,13 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 
 from app.ask.pipeline import answer
 from app.ask.schemas import AskRequest
 from app.auth.jwt import AuthenticatedPrincipal
 from app.db import tenant_session
+from app.ingest.operational import ingest_operational
 from app.ingest.schemas import AccessRole, Identifier, OutcomeInput
 from app.ingest.service import MAX_BYTES, ingest_csv, ingest_outcome, ingest_policy, list_sources
 from app.models import RetrievalLog
@@ -17,18 +18,27 @@ router = APIRouter(prefix="/api", tags=["evidence pipeline"])
 @router.post("/ingest/csv")
 def upload_csv(
     principal: AuthenticatedPrincipal,
-    kind: Annotated[Literal["jobs", "submissions", "interviews", "starts"], Form()],
-    source_id: Annotated[Identifier, Form()],
     file: Annotated[UploadFile, File()],
+    kind: Annotated[
+        Literal["operational", "jobs", "submissions", "interviews", "starts"], Form()
+    ] = "operational",
+    source_id: Annotated[Identifier | None, Form()] = None,
     min_role: Annotated[AccessRole, Form()] = "viewer",
 ):
+    data = file.file.read(MAX_BYTES + 1)
+    if kind == "operational":
+        return ingest_operational(
+            principal, min_role, file.filename or "operations.csv", data, source_id
+        )
+    if source_id is None:
+        raise HTTPException(422, "source_id is required for a single-record-type CSV.")
     return ingest_csv(
         principal,
         kind,
         source_id,
         min_role,
         file.filename or "data.csv",
-        file.file.read(MAX_BYTES + 1),
+        data,
     )
 
 
