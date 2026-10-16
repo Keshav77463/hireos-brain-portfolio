@@ -60,8 +60,10 @@ identity service. Use synthetic data and local credentials only.
 
 ## Temporary dataset and first question
 
-Either upload the files from `fixtures/temporary/tenant_a/` in the browser
-(jobs, submissions, interviews, starts, then policy), or use:
+Upload one CSV, `fixtures/temporary/tenant_a/operations_a.csv`, in the browser.
+It has the agreed 13 columns and one row per submission, with job, interview
+and start details on that row. Then upload `policy_a.md` separately.
+Alternatively, load both tenants using:
 
 ```powershell
 docker compose exec api python scripts/seed.py
@@ -70,6 +72,12 @@ docker compose exec api python scripts/seed.py
 The script uses the same ingestion service as HTTP uploads. Repeating it is safe;
 it does not automatically ingest the separate new outcome. No data is seeded at startup.
 All fixtures are clearly synthetic, with candidate aliases rather than real people.
+The importer validates the entire file and saves normalized records in one transaction.
+Tenant identity comes from the token; source references are attached by the backend.
+Existing record/source IDs are retained. Newer fixture rows enrich prior records;
+blank interview/start cells never delete existing outcomes. All 13 validated values
+are retained in the submission's JSON payload. No schema migration is needed.
+See [the exact schema and mapping](docs/API.md).
 
 Connect a Tenant A token and ask:
 **Why did ICU RN submissions increase while interviews decreased?**
@@ -86,6 +94,10 @@ source records, policy chunks, limitations, and a retrieval log ID.
 Generate a `--tenant b` token to view its distinct data. The cross-tenant test
 button requests the other tenant and must receive HTTP 403 with no evidence.
 Generate a `--role viewer` token to verify read-only behavior.
+
+For a smaller seven-submission sample, see [Tenant C](fixtures/temporary/tenant_c/README.md).
+The [CSV correction example](fixtures/temporary/examples/README.md) demonstrates the
+difference between a fresh import and an update that preserves prior outcomes.
 
 ## Security foundation
 
@@ -105,6 +117,16 @@ Generate a `--role viewer` token to verify read-only behavior.
 - The pgvector extension is enabled; vector search is optional and not implemented.
 
 ## Tests and lint
+
+Without Docker, run the independent checks after creating the local .env:
+
+```powershell
+uv run pytest -m unit -q
+```
+
+These validate CSV rules, authentication, citations and the page shell. They do not
+verify SQL aggregation, migrations or database isolation. Run the full Compose suite
+before the acceptance demo.
 
 Run tests against the real Compose PostgreSQL as the application database user:
 

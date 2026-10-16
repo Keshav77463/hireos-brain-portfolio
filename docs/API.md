@@ -20,36 +20,74 @@ are public and disclose no records.
 
 ## Uploads
 
-Multipart fields: source_id, min_role (viewer default), file. CSV also requires
-kind: jobs, submissions, interviews or starts. Upload as recruiter or admin.
-Identifiers accept letters, digits, dots, underscores and hyphens; maximum 128 characters.
-Each file is limited to 2 MiB; total request body to 3 MiB; CSV to 5,000 rows.
-UTC timestamps must include an explicit offset, for example 2026-06-10T09:00:00Z.
-Whitespace is stripped. The CSV header must match the documented schema exactly.
+Upload one operational CSV with multipart fields file and min_role (viewer default).
+kind defaults to operational. Upload as recruiter or admin. File limit: 2 MiB;
+request limit: 3 MiB; maximum 5,000 submission rows.
+Use UTF-8 and timezone-aware timestamps such as 2026-06-10T09:00:00Z.
 
-Common required CSV columns:
-tenant_id, source_id, record_id, updated_at.
+The exact 13-column header is:
 
-| kind | Additional required columns |
+```csv
+submission_id,job_id,client_name,specialty,candidate_ref,submitted_at,status,rejection_reason,interview_id,interviewed_at,start_id,started_at,updated_at
+```
+
+One row represents one submission. All columns must exist; optional values use empty cells.
+
+| Fields | Rules |
 | --- | --- |
-| jobs | title, location |
-| submissions | job_id, candidate_alias, submitted_at, reason |
-| interviews | submission_id, occurred_at |
-| starts | submission_id, occurred_at |
+| submission_id | Required, unique in the CSV |
+| job_id, client_name, specialty | Required; repeated jobs need consistent client/specialty |
+| candidate_ref | Required; synthetic candidate reference for the demo |
+| submitted_at, updated_at | Required; updated_at cannot precede any recorded event |
+| status | submitted, awaiting_documents, awaiting_client_review, withdrawn, rejected, interviewed, started |
+| rejection_reason | Required for rejected, empty for other statuses |
+| interview_id, interviewed_at | Both supplied together for an interview that occurred, or both empty |
+| start_id, started_at | Both supplied together, or both empty |
 
-Submission reason: ready, awaiting_documents, awaiting_client_review or withdrawn.
-The tenant_id must match the JWT, and every source_id must match the multipart field.
-Jobs must exist before submissions; submissions before outcomes.
-Outcome times cannot precede submission time. updated_at cannot precede an event.
-Submission job/time and outcome links/kind/time are immutable; other content can be
-updated using a newer updated_at. Unchanged records are skipped, older updates are
-reported as stale, and conflicting content at an equal timestamp returns 409.
-Changing an existing source's type or minimum role returns 409.
-An invalid row rolls back the complete file, including its newly created source.
+Identifiers accept letters, digits, dots, underscores and hyphens, maximum 128 characters.
+Client/specialty are at most 120 characters; rejection reason 500.
+Dates are timezone-aware. Interview cannot precede submission; start cannot precede
+interview. A started status requires interview and start details. Interviewed
+requires interview details. Pre-interview statuses cannot contain completed interviews.
+Interview/start IDs share an outcomes table and must not collide.
 
-Policy source IDs must be distinct from CSV source IDs. Plain text is stored in
-bounded paragraph chunks, with stable source-based chunk IDs and updated_at.
-Identical policy bytes are idempotent; changed policy content replaces its chunks.
+Tenant comes only from the verified token. tenant_id, source_id and record_type are
+not CSV columns. Optional multipart source_id supplies the namespace for new records
+(default operations). Existing accessible records retain their source IDs and minimum
+role. Imports cannot lower visibility. Source filename/hash describe the latest upload.
+
+Repeated jobs are deduplicated and use the latest updated_at in their group. Normalized
+jobs, submissions and outcomes are saved atomically. Blank outcome cells or absent rows
+never delete previously stored data. Unchanged rows are idempotent; older timestamps
+are reported as stale; conflicting content at the same timestamp returns 409.
+Submission job/time and outcome links/kind/event time are immutable.
+
+### Database mapping
+
+| CSV information | Storage |
+| --- | --- |
+| job_id | jobs.record_id, linked from submissions.job_id |
+| specialty | jobs.title and job payload |
+| client_name | Job payload; location is not invented |
+| submission_id | submissions.record_id |
+| candidate_ref | Submission payload, also candidate_alias for existing evidence consumers |
+| status/rejection_reason | Submission JSON payload |
+| All 13 validated fields | submissions.payload.csv_row |
+| Interview/start IDs and dates | Separate outcomes linked to the submission |
+| tenant/source/updated_at | Attached to each normalized record |
+
+Existing JSONB columns store metadata; migrations 0001/0002 remain sufficient.
+The CSV covers jobs with submissions and one interview/start per row. The outcome
+API can append additional events. Status is a source snapshot; newer outcomes may
+exist even when an older CSV status is unchanged.
+
+For compatibility, kind=jobs/submissions/interviews/starts accepts the original
+type-specific CSV headers and source_id. Only those formats accept an explicit
+tenant_id, which must match the verified token. The browser uses the 13-column schema.
+
+Policy upload requires source_id, min_role and file. Use a source ID distinct from
+the operational sources. UTF-8 text/Markdown is chunked; identical bytes are idempotent,
+and changed content replaces chunks.
 
 ## Ask request
 

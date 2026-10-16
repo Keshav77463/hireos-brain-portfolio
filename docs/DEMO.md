@@ -7,9 +7,10 @@ synthetic data before recording the final submission.
 1. **Setup and identity (1 minute).** Show Compose services and /health. Explain
    app versus migrator DB users. Generate a Tenant A admin token locally and connect
    at http://localhost:8000. Do not show .env or keys in the recording.
-2. **Upload evidence (1–2 minutes).** Using the browser, upload Tenant A jobs,
-   submissions, interviews, starts and policy from fixtures/temporary/tenant_a.
-   Explain common tenant/source/record identifiers and updated_at. Show the source list.
+2. **Upload evidence (1–2 minutes).** Using the browser, upload Tenant A's single
+   operations_a.csv, then policy_a.md from fixtures/temporary/tenant_a.
+   Explain one row per submission and optional interview/start fields. Show how
+   tenant/source references are attached by the backend and inspect updated_at.
    Begin from an unseeded demo tenant so the upload is observable.
 3. **Ask and inspect (2 minutes).** Ask the conversion question. Show baseline
    6/10 = 60%, current 4/20 = 20%, and the -40 percentage-point change.

@@ -8,8 +8,22 @@ these controls manually.
 Jobs, submissions and outcomes have composite tenant/record keys. Outcome kind
 distinguishes interviews and starts. Validated original row fields are retained
 as JSON alongside indexed typed fields. Every evidence row links to a source
-and keeps updated_at. Sources retain original filename and the last uploaded
-file's SHA-256; the hash records the upload, not an immutable version history.
+and keeps updated_at. Sources retain the latest filename and the last uploaded
+file's SHA-256; the filename and hash describe the latest upload, not an immutable
+version history.
+
+One company uploads one 13-column CSV plus a separate policy document. Each row is a
+submission with repeated job metadata and optional completed interview/start details.
+The importer validates event groups and date order, deduplicates jobs, then normalizes
+records in one transaction. Tenant identity comes from the verified token. Sources
+are attached server-side. Existing source IDs and access levels are preserved.
+
+The added metadata and complete validated CSV row live in existing JSONB payloads;
+no schema migration is needed. specialty supplies the job title. client_name remains
+client metadata rather than an invented location. This format covers jobs with
+submissions and one interview/start per row; the outcome API can append more events.
+Imports update/append, never delete events because cells are blank. Previously
+ingested unused jobs may remain.
 
 The same service implements HTTP and seed ingestion. Imports validate tenant IDs,
 schema, links and timestamps and commit atomically. Record updates use timestamps
@@ -45,9 +59,10 @@ If no full-text match exists, up to five authorized chunks are shown as context;
 the response labels that fallback. This is deliberately small and explainable.
 
 The provider interface is separate from retrieval. The shipped mock formats actual
-computed values and cautiously describes recorded queues; it never executes
+computed values, recorded queues and explicit rejection reasons; it never executes
 instructions found in a question or document. Citation validation permits only
 the current authorized evidence IDs. Rejected provider output releases no interpretation.
+Queue statuses alone are not treated as proof of a delay's cause.
 Citation checking verifies reference membership, not entailment or factual truth;
 a future external LLM would also need claim-level grounding evaluation.
 
