@@ -3,6 +3,24 @@
 An evidence-backed recruiting analytics application built with Python 3.12,
 FastAPI, PostgreSQL 16, and Docker Compose.
 
+Multiple organizations share the application and database. Verified JWT identities,
+tenant-aware records, role checks, and PostgreSQL row-level security keep their
+data separated. Recruiting metrics come from SQL; the shipped interpretation
+provider is a deterministic mock with validated evidence citations.
+
+## Explore the implementation
+
+| Start here | What it explains |
+| --- | --- |
+| [File-by-file guide](docs/FILE_GUIDE.md) | Every tracked file, its purpose, the reading order, request flow, and implementation commits. |
+| [Design and security](docs/DESIGN.md) | Multi-tenancy, database policies, conversion semantics, retrieval, and demo boundaries. |
+| [API reference](docs/API.md) | Endpoints, the 13-column CSV contract, request examples, and error behavior. |
+| [Demo walkthrough](docs/DEMO.md) | Setup, uploads, cited answers, outcome freshness, and tenant/role checks. |
+
+For a code walkthrough, follow `app/main.py` -> `app/api/pipeline.py` -> the
+ingestion or Ask services. Read `app/auth/jwt.py`, `app/db.py`, the migrations,
+and `tests/test_isolation.py` together to understand how tenant isolation works.
+
 ## Current milestone
 
 The local pipeline supports CSV/policy uploads, tenant and role checks,
@@ -10,9 +28,6 @@ deterministic conversion, policy retrieval, cited mock answers, new outcomes,
 and retrieval history. The browser interface runs from the same FastAPI service.
 Small **temporary** synthetic fixtures cover two comparison months and two tenants.
 The proper final dataset and the recorded demo video remain to be prepared.
-
-See [API reference](docs/API.md), [design and security](docs/DESIGN.md),
-and [demo walkthrough](docs/DEMO.md).
 
 ## Start locally
 
@@ -180,8 +195,9 @@ The demo deliberately uses a deterministic mock; no external LLM key is needed.
 Vector search and a BYO LLM adapter are optional and currently not implemented.
 Policy uploads support UTF-8 text/Markdown; binary PDF/Word parsing is not included.
 
-Keep the company repository private. Daily commits are required by the brief;
-commit and push only when explicitly authorized.
+This is the public portfolio copy. The original assignment repository remains
+separate and private. Existing implementation commits retain their original
+authors and dates; the file guide explains the milestones and current file layout.
 
 ## References
 
