@@ -1,12 +1,11 @@
-# Acceptance walkthrough (5–10 minutes)
+# Demo walkthrough (5–10 minutes)
 
-This is a recording script. The actual video has not been recorded.
-Use temporary fixtures during development; replace them with the final agreed
-synthetic data before recording the final submission.
+Follow this walkthrough to demonstrate ingestion, evidence-backed calculations,
+outcome freshness, and tenant isolation using the bundled synthetic fixtures.
 
 1. **Setup and identity (1 minute).** Show Compose services and /health. Explain
    app versus migrator DB users. Generate a Tenant A admin token locally and connect
-   at http://localhost:8000. Do not show .env or keys in the recording.
+   at http://localhost:8000. Keep .env and keys out of screen sharing or recordings.
 2. **Upload evidence (1–2 minutes).** Using the browser, upload Tenant A's single
    operations_a.csv, then policy_a.md from fixtures/temporary/tenant_a.
    Explain one row per submission and optional interview/start fields. Show how
@@ -29,7 +28,7 @@ synthetic data before recording the final submission.
    metrics/service.py, ask/pipeline.py and migration 0002. Show automated test results.
    State the mock-provider choice, temporary fixture status and remaining limitations.
 
-The seed script is convenient for development but should not replace the observable
-upload steps in the final acceptance recording. New outcomes persist in the database;
+Use the browser upload steps to demonstrate ingestion; the seed script is convenient
+for preparing a local development environment. New outcomes persist in the database;
 rerunning seed does not erase them. For a repeatable fresh walkthrough, generate files
 for a fresh synthetic tenant ID and mint a token for it instead of deleting existing data.

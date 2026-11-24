@@ -174,13 +174,11 @@ The unit suite alone does not verify PostgreSQL policies or SQL aggregation.
 | --- | --- |
 | [docs/API.md](API.md) | Endpoint reference, exact operational CSV schema, field mappings, request examples, response semantics, and error codes. |
 | [docs/DESIGN.md](DESIGN.md) | Data model, conversion definition, snapshots, retrieval choices, security controls, and explicit demo limitations. |
-| [docs/DEMO.md](DEMO.md) | Acceptance walkthrough covering setup, uploads, calculations, freshness, and tenant/role isolation. |
+| [docs/DEMO.md](DEMO.md) | Demo walkthrough covering setup, uploads, calculations, freshness, and tenant/role isolation. |
 | [docs/FILE_GUIDE.md](FILE_GUIDE.md) | This complete file inventory, suggested reading order, request flow, and implementation history. |
 
 ## Implementation history
 
-Implementation commits retain their original authors and dates. The portfolio
-history starts with the Python application foundation.
 Use the short hashes below to locate each change in Git history.
 Documentation improvements follow this implementation history.
 

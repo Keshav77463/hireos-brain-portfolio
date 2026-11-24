@@ -3,7 +3,7 @@
 `operations_a_corrected.csv` preserves the manually edited Tenant A sample.
 Submission `SUB-A-M02` is awaiting documents, its interview cells are empty,
 and its `updated_at` is July 2, 2026. The standard Tenant A sample retains the
-original interview so its tests and acceptance walkthrough are reproducible.
+original interview so its tests and demo walkthrough are reproducible.
 
 Uploaded to a fresh authorized tenant, this example produces May 5/10 = 50%
 and June 4/20 = 20%. Uploaded after the standard Tenant A sample, it changes

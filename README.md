@@ -21,13 +21,13 @@ For a code walkthrough, follow `app/main.py` -> `app/api/pipeline.py` -> the
 ingestion or Ask services. Read `app/auth/jwt.py`, `app/db.py`, the migrations,
 and `tests/test_isolation.py` together to understand how tenant isolation works.
 
-## Current milestone
+## Features
 
 The local pipeline supports CSV/policy uploads, tenant and role checks,
 deterministic conversion, policy retrieval, cited mock answers, new outcomes,
 and retrieval history. The browser interface runs from the same FastAPI service.
-Small **temporary** synthetic fixtures cover two comparison months and two tenants.
-The proper final dataset and the recorded demo video remain to be prepared.
+Bundled synthetic fixtures cover two comparison months and separate tenant workflows.
+An additional seven-submission sample demonstrates a third tenant.
 
 ## Start locally
 
@@ -73,10 +73,10 @@ Tenant and role come only from the verified token.
 HS256 and local token generation are demo conveniences, not a production
 identity service. Use synthetic data and local credentials only.
 
-## Temporary dataset and first question
+## Sample dataset and first question
 
 Upload one CSV, `fixtures/temporary/tenant_a/operations_a.csv`, in the browser.
-It has the agreed 13 columns and one row per submission, with job, interview
+It has the required 13 columns and one row per submission, with job, interview
 and start details on that row. Then upload `policy_a.md` separately.
 Alternatively, load both tenants using:
 
@@ -141,7 +141,7 @@ uv run pytest -m unit -q
 
 These validate CSV rules, authentication, citations and the page shell. They do not
 verify SQL aggregation, migrations or database isolation. Run the full Compose suite
-before the acceptance demo.
+to verify those database behaviors.
 
 Run tests against the real Compose PostgreSQL as the application database user:
 
@@ -184,20 +184,17 @@ use it only when deliberately resetting this synthetic local demo.
 Bootstrap scripts run only when the volume is first initialized.
 Changing `.env` does not rotate existing database passwords.
 
-## Remaining assignment work
+## Roadmap
 
-- Replace temporary development fixtures with the agreed final synthetic dataset.
-- Record the 5–10 minute acceptance walkthrough in `docs/DEMO.md`.
-- Review the implementation and explain the design choices and known limits.
-- Commit the reviewed work to the company repository as instructed.
+- Expand synthetic datasets to cover more recruiting scenarios and longer comparison periods.
+- Add an external interpretation-provider adapter with claim-level grounding evaluation.
+- Add pagination and background processing for larger imports.
+
+## Current limits
 
 The demo deliberately uses a deterministic mock; no external LLM key is needed.
 Vector search and a BYO LLM adapter are optional and currently not implemented.
 Policy uploads support UTF-8 text/Markdown; binary PDF/Word parsing is not included.
-
-This is the public portfolio copy. The original assignment repository remains
-separate and private. Existing implementation commits retain their original
-authors and dates; the file guide explains the milestones and current file layout.
 
 ## References
 

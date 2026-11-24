@@ -90,12 +90,13 @@ a future external LLM would also need claim-level grounding evaluation.
   Local secrets are generated into ignored .env; the browser receives only a demo JWT.
   Tokens remain in sessionStorage until disconnect/tab closure/expiry.
 
-## Demo boundaries
+## Scope and limitations
 
-This is an assignment demo, not a production recruiting system. Admin represents
-the demo tenant owner; viewer is a reviewer role. It does not implement production
-hiring-manager company scoping, user provisioning, token revocation, centralized
-identity management, policy approval, job-based recruiter ownership or a full audit sink.
+The application covers tenant-scoped ingestion, recruiting conversion metrics,
+policy retrieval, and cited interpretations. Admin represents the tenant owner;
+viewer provides read-only access. Production hiring-manager company scoping,
+user provisioning, token revocation, centralized identity management, policy approval,
+job-based recruiter ownership, and a full audit sink are outside the current scope.
 Application compromise could issue arbitrary local RLS session settings, so PostgreSQL
 RLS complements trusted server authentication rather than replacing it.
 

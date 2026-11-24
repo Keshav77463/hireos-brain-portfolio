@@ -1,7 +1,7 @@
 # Temporary development fixtures
 
 All people, facilities, records and policy passages are synthetic. These small fixtures
-exercise the pipeline while the final assignment dataset is being prepared.
+exercise ingestion, conversion calculations, freshness, and tenant isolation.
 They cover two comparison months (May and June 2026), not six months.
 
 Tenant A: 10 baseline submissions / 6 interviewed = 60%; 20 current submissions /
@@ -13,7 +13,7 @@ Both tenants deliberately use the same job title to exercise isolation.
 
 The default A/B fixtures contain two ICU jobs, 35 submissions, 12 interviews and three starts.
 Tenant A uploads operations_a.csv (30 submission rows); Tenant B uploads operations_b.csv
-(5 submission rows). Each uses the agreed 13-column, one-row-per-submission schema.
+(5 submission rows). Each uses the required 13-column, one-row-per-submission schema.
 Tenant/source references are attached by the backend; those fields are not in the CSV.
 Statuses reflect source snapshots and alone do not establish the reason for a delay.
 Repeated job details must be consistent; outcome groups are
